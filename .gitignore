@@ -7,5 +7,10 @@ __pycache__/
 venv/
 *.log
 
+# Spark runtime
+spark-warehouse/
+metastore_db/
+derby.log
+
 data/*
 !data/.gitkeep

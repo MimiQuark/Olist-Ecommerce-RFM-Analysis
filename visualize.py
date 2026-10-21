@@ -51,9 +51,13 @@ plt.close()
 # ============================================================
 df_monthly = pd.read_csv(os.path.join(OUTPUT_DIR, "monthly_sales.csv"))
 df_monthly["order_month"] = df_monthly["order_month"].astype(str)
-# 剔除首尾不完整月份（订单量过低的噪声月，避免环比增长率失真）
-df_monthly = df_monthly[df_monthly["order_count"] >= 100].reset_index(drop=True)
-# 过滤后重算环比，避免被已剔除月份的小基数放大
+# 只画数据完整的月份区间（2017-01 至 2018-08）：首尾单量过低的月份
+# 不参与趋势图，避免小基数/跨缺月把环比增长率放大。
+df_monthly = df_monthly[
+    (df_monthly["order_month"] >= "2017-01")
+    & (df_monthly["order_month"] <= "2018-08")
+].reset_index(drop=True)
+# 在该连续区间内重算环比（CSV 中保留的 null 环比不再用于绘图）
 df_monthly["mom_growth_pct"] = df_monthly["monthly_gmv"].pct_change() * 100
 
 fig, ax1 = plt.subplots(figsize=(14, 6))

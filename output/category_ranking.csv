@@ -17,7 +17,7 @@ office_furniture,339756.59,1269,201.64,15
 stationery,273975.46,2294,109.59,16
 pet_shop,252877.86,1704,130.35,17
 computers,232799.43,181,1146.8,18
-,210340.78,1444,131.63,19
+unknown,210340.78,1444,131.63,19
 musical_instruments,205558.11,618,310.51,20
 electronics,203234.61,2541,73.82,21
 small_appliances,199930.55,614,301.55,22
@@ -70,4 +70,4 @@ flowers,1598.91,29,48.45,68
 home_comfort_2,1170.58,24,39.02,69
 cds_dvds_musicals,954.99,12,68.21,70
 fashion_childrens_clothes,598.67,7,85.52,71
-security_and_services,324.51,2,162.25,72
+security_and_services,324.51,2,162.26,72
