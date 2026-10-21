@@ -6,7 +6,7 @@
 import os
 from pyspark.sql import SparkSession, functions as F
 from pyspark.sql.window import Window
-from pyspark.sql.types import FloatType
+from pyspark.sql.types import DoubleType
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
@@ -44,8 +44,8 @@ print(f"  支付表: {df_payments.count():,} 行")
 print("\n" + "=" * 60)
 print("[2/6] 数据清洗...")
 
-df_items = df_items.withColumn("price", F.col("price").cast(FloatType())) \
-    .withColumn("freight_value", F.col("freight_value").cast(FloatType()))
+df_items = df_items.withColumn("price", F.col("price").cast(DoubleType())) \
+    .withColumn("freight_value", F.col("freight_value").cast(DoubleType()))
 
 # 时间戳兼容两种格式: Kaggle 原版为 yyyy-MM-dd, 部分镜像为 yyyy/MM/dd
 df_orders = df_orders.withColumn("order_purchase_timestamp",
@@ -58,10 +58,11 @@ n_null_ts = df_orders.filter(F.col("order_purchase_timestamp").isNull()).count()
 print(f"  时间戳解析失败行数: {n_null_ts:,}")
 
 df_orders = df_orders.filter(
-    F.col("order_status").isin("delivered", "shipped", "invoiced")
+    F.col("order_purchase_timestamp").isNotNull()
+    & F.col("order_status").isin("delivered", "shipped", "invoiced")
 )
 
-df_payments = df_payments.withColumn("payment_value", F.col("payment_value").cast(FloatType()))
+df_payments = df_payments.withColumn("payment_value", F.col("payment_value").cast(DoubleType()))
 
 payment_total = df_payments.groupBy("order_id").agg(
     F.sum("payment_value").alias("total_payment")
@@ -117,7 +118,9 @@ df_item = df_orders \
     .select(
         df_orders.order_id,
         df_products.product_category_name,
-        F.col("product_category_name_english"),
+        # 翻译表缺失时归入 unknown，避免产生空类目行
+        F.coalesce(F.col("product_category_name_english"),
+                   F.lit("unknown")).alias("product_category_name_english"),
         (F.col("price") + F.col("freight_value")).alias("item_gmv")
     )
 
@@ -154,10 +157,26 @@ save_csv(state_analysis, "state_analysis.csv")
 print("\n" + "=" * 60)
 print("[5/6] 月度销售趋势分析...")
 
-monthly_sales = df_order.groupBy("order_month").agg(
+monthly_actual = df_order.groupBy("order_month").agg(
     F.round(F.sum("total_payment"), 2).alias("monthly_gmv"),
     F.count("order_id").alias("order_count"),
     F.round(F.avg("total_payment"), 2).alias("avg_order_value")
+)
+
+# 构造连续月份骨架：缺失月份保留为空行，环比只在相邻且有上月数据时计算，
+# 避免 lag 跨过一个无订单月份后把“多月变化”误标成“环比”。
+bounds = df_order.agg(
+    F.min("order_month").alias("min_month"),
+    F.max("order_month").alias("max_month"),
+).collect()[0]
+month_spine = spark.sql(
+    "SELECT explode(sequence("
+    f"to_date('{bounds['min_month']}-01'), to_date('{bounds['max_month']}-01'), "
+    "interval 1 month)) AS month_date"
+).withColumn("order_month", F.date_format("month_date", "yyyy-MM")) \
+ .select("order_month")
+monthly_sales = month_spine.join(monthly_actual, "order_month", "left").withColumn(
+    "order_count", F.coalesce(F.col("order_count"), F.lit(0))
 ).orderBy("order_month")
 
 window_spec = Window.orderBy("order_month")
@@ -165,7 +184,11 @@ monthly_sales = monthly_sales.withColumn(
     "prev_month_gmv", F.lag("monthly_gmv").over(window_spec)
 ).withColumn(
     "mom_growth_pct",
-    F.round((F.col("monthly_gmv") - F.col("prev_month_gmv")) / F.col("prev_month_gmv") * 100, 2)
+    F.when(
+        F.col("prev_month_gmv").isNotNull() & (F.col("prev_month_gmv") != 0),
+        F.round((F.col("monthly_gmv") - F.col("prev_month_gmv"))
+                / F.col("prev_month_gmv") * 100, 2),
+    )
 )
 
 monthly_sales.show(30, truncate=False)
@@ -201,15 +224,24 @@ rfm = df_order.groupBy("customer_unique_id").agg(
 )
 
 # R/M 用四分位打分; F 高度集中于 1 次, ntile 会随机拆分同值,
-# 改用阈值打分保证同频次客户得分一致
-rfm = rfm.withColumn("r_score", F.ntile(4).over(Window.orderBy(F.col("recency").desc()))) \
-    .withColumn("f_score",
-        F.when(F.col("frequency") >= 4, 4)
-         .when(F.col("frequency") == 3, 3)
-         .when(F.col("frequency") == 2, 2)
-         .otherwise(1)
-    ) \
-    .withColumn("m_score", F.ntile(4).over(Window.orderBy("monetary")))
+# 改用阈值打分保证同频次客户得分一致。
+# R/M 的同值（尤其 recency 的整数天数）可能跨分位边界，加入
+# customer_unique_id 作为二级排序键，保证跨 Spark 版本/分区布局可复现。
+rfm = rfm.withColumn(
+    "r_score",
+    F.ntile(4).over(Window.orderBy(F.col("recency").desc(),
+                                  F.col("customer_unique_id"))),
+).withColumn(
+    "f_score",
+    F.when(F.col("frequency") >= 4, 4)
+     .when(F.col("frequency") == 3, 3)
+     .when(F.col("frequency") == 2, 2)
+     .otherwise(1),
+).withColumn(
+    "m_score",
+    F.ntile(4).over(Window.orderBy(F.col("monetary"),
+                                  F.col("customer_unique_id"))),
+)
 
 rfm = rfm.withColumn("rfm_score", F.col("r_score") + F.col("f_score") + F.col("m_score"))
 

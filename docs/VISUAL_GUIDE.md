@@ -113,7 +113,7 @@ flowchart LR
     C1 --> E1[SP 约 585 万 BRL，约 4.1 万单]
     C2 --> E2[health_beauty 约 144 万 BRL]
     C3 --> E3[2017-11 单月约 116.7 万 BRL]
-    C4 --> E4[复购率约 3.0% / 高频客户约 603 人]
+    C4 --> E4[复购率约 3.0% / 高价值客户约 603 人]
 
     C1 --> A1[物流与营销优先资源]
     C2 --> A2[品类结构和客单价分析]
@@ -139,7 +139,7 @@ flowchart LR
 
 ![品类排名](../output/charts/03_category_ranking.png)
 
-解释：用商品行级 GMV 和件均价识别高收入、高单价品类。
+解释：图表展示商品行级 GMV 排名；配套 CSV 另含 `avg_item_value`（price + freight，非纯商品单价），用于识别高客单品类。
 
 ### RFM 客户分层
 
