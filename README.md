@@ -1,6 +1,7 @@
 # 基于 PySpark 的电商经营分析与用户价值分层
 
-[![Syntax CI](https://github.com/MimiJimmy001/Ecommerce-Analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/MimiJimmy001/Ecommerce-Analysis/actions/workflows/ci.yml)
+[![CI](https://github.com/MimiQuark/Olist-Ecommerce-RFM-Analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/MimiQuark/Olist-Ecommerce-RFM-Analysis/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github&logoColor=white)](https://github.com/MimiQuark/Olist-Ecommerce-RFM-Analysis)
 [![PySpark](https://img.shields.io/badge/PySpark-3.4%2B-E25A1C?logo=apachespark&logoColor=white)](https://spark.apache.org/docs/latest/api/python/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -69,6 +70,14 @@ python visualize.py   # 生成图表
 ```
 
 > Windows 下运行时出现 `winutils.exe` / `native-hadoop` 相关 WARN 属正常现象，不影响结果。
+
+## 验证
+
+```bash
+python -m pytest -q
+```
+
+4 项测试直接校验已提交的 `output/` CSV：州级排名与 SP 头部占比、月度覆盖范围、品类前三、RFM 总客户数与高价值客群。
 
 ## 工具
 
